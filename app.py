@@ -1,99 +1,110 @@
-# Diccionario con los productos y sus precios en pesos colombianos (COP)
-precios_tequenos = {
-    # Medianos (15.000)
-    "mediano_queso": 15000,
-    "mediano_jamon": 15000,
-    
-    # Grandes Grupo A (20.000)
-    "grande_queso": 20000,
-    "grande_bocadillo": 20000,
-    "grande_oregano": 20000,
-    
-    # Grandes Grupo B (22.000)
-    "grande_salchicha": 22000,
-    "grande_tocineta": 22000,
-    "grande_jamon": 22000,
-}
+import os
 from flask import Flask, request, jsonify
+import requests
 
 app = Flask(__name__)
 
-# 1. Tu inventario inicial (en ceros para que lo vayan llenando)
-inventario_tequenos = {
-    "mediano_queso": 0,
-    "mediano_jamon": 0,
-    "grande_queso": 0,
-    "grande_bocadillo": 0,
-    "grande_oregano": 0,
-    "grande_salchicha": 0,
-    "grande_tocineta": 0,
-    "grande_jamon": 0,
+# Configuración de Whapi
+WHAPI_TOKEN = "d4f5Jc8rv2J6hF9fWfFGJT6b3jKjzfg0MdaH7musc0e9bf17"
+WHAPI_URL = "https://gate.whapi.cloud/messages/text"
+
+# Inventario y Precios de Tequeños
+inventario = {
+    "grande_queso": {"cantidad": 0, "precio": 20000, "nombre": "Grandes de Queso"},
+    "grande_bocadillo": {"cantidad": 0, "precio": 20000, "nombre": "Grandes Queso c/ Bocadillo"},
+    "grande_oregano": {"cantidad": 0, "precio": 20000, "nombre": "Grandes Queso c/ Orégano"},
+    "grande_jamon": {"cantidad": 0, "precio": 22000, "nombre": "Grandes Jamón c/ Queso"},
+    "grande_salchicha": {"cantidad": 0, "precio": 22000, "nombre": "Grandes Salchicha c/ Queso"},
+    "grande_tocineta": {"cantidad": 0, "precio": 22000, "nombre": "Grandes Tocineta c/ Queso"},
+    "mediano": {"cantidad": 0, "precio": 15000, "nombre": "Medianos (Cualquier sabor)"},
+    "pasapalo_crudo": {"cantidad": 0, "precio": 70000, "nombre": "Pasapalos Crudos"},
+    "pasapalo_frito": {"cantidad": 0, "precio": 75000, "nombre": "Pasapalos Fritos"}
 }
 
-# 2. Función que procesa los comandos que llegan por WhatsApp
-def procesar_comando(mensaje):
-    mensaje = mensaje.lower().strip()
-    partes = mensaje.split()
-    
+def procesar_comando(texto):
+    texto = texto.strip().lower()
+    partes = texto.split()
+
     if not partes:
-        return "Escribe un comando válido."
-    
+        return "Por favor envía un comando válido."
+
     comando = partes[0]
-    
-    # Ver inventario
-    if comando in ["inventario", "ver"]:
-        respuesta = "📦 *Inventario Actual de Tequeños*:\n"
-        for sabor, cantidad in inventario_tequenos.items():
-            respuesta += f"- {sabor}: {cantidad}\n"
+
+    # Consultar inventario y menú
+    if comando == "inventario" or comando == "menu":
+        respuesta = "📋 *MENÚ Y DISPONIBILIDAD DE TEQUEÑOS* 📋\n\n"
+        
+        respuesta += "🧀 *TEQUEÑOS GRANDES*\n"
+        for key in ["grande_queso", "grande_bocadillo", "grande_oregano"]:
+            respuesta += f"• {inventario[key]['nombre']}: {inventario[key]['precio']} Bs (Disp: {inventario[key]['cantidad']})\n"
+            
+        respuesta += "\n🥓 *TEQUEÑOS GRANDES ESPECIALES*\n"
+        for key in ["grande_jamon", "grande_salchicha", "grande_tocineta"]:
+            respuesta += f"• {inventario[key]['nombre']}: {inventario[key]['precio']} Bs (Disp: {inventario[key]['cantidad']})\n"
+            
+        respuesta += "\n🍘 *TEQUEÑOS MEDIANOS*\n"
+        respuesta += f"• {inventario['mediano']['nombre']}: {inventario['mediano']['precio']} Bs (Disp: {inventario['mediano']['cantidad']})\n"
+        
+        respuesta += "\n🎉 *PASAPALOS (FIESTA)*\n"
+        for key in ["pasapalo_crudo", "pasapalo_frito"]:
+            respuesta += f"• {inventario[key]['nombre']}: {inventario[key]['precio']} Bs (Disp: {inventario[key]['cantidad']})\n"
+            
         return respuesta
-    
+
     # Modificar inventario (+ o -)
     elif comando in ["+", "-"] and len(partes) >= 3:
         try:
             cantidad = int(partes[1])
-            sabor = partes[2]
-            
-            if sabor in inventario_tequenos:
-                if comando == "+":
-                    inventario_tequenos[sabor] += cantidad
-                    return f"✅ ¡Agregado! Ahora hay {inventario_tequenos[sabor]} bandejas de {sabor}."
-                elif comando == "-":
-                    if inventario_tequenos[sabor] >= cantidad:
-                        inventario_tequenos[sabor] -= cantidad
-                        return f"🔻 Salida registrada. Quedan {inventario_tequenos[sabor]} bandejas de {sabor}."
-                    else:
-                        return f"⚠️ Alerta: Solo quedan {inventario_tequenos[sabor]} bandejas de {sabor}."
-            else:
-                return f"❌ El sabor '{sabor}' no existe. Revisa el nombre."
-        except ValueError:
-            return "❌ La cantidad debe ser un número."
-            
-    else:
-        return "🤖 Comandos disponibles:\n- `inventario`\n- `+ [cant] [sabor]`\n- `- [cant] [sabor]`"
+            codigo_sabor = partes[2]
 
-# 3. La ruta (Webhook) que recibe los mensajes que manda Green API
-@app.route("/webhook", methods=["POST"])
-def webhook_whatsapp():
-    data = request.json
-    
-    # Verificamos si es un mensaje de texto entrante de WhatsApp
-    try:
-        if data.get("typeWebhook") == "incomingMessageReceived":
-            mensaje_texto = data["messageData"]["textMessageData"]["textMessage"]
-            chat_id = data["senderData"]["chatId"]
-            
-            # Procesamos el mensaje con nuestra lógica
-            respuesta_texto = procesar_comando(mensaje_texto)
-            
-            # Aquí es donde Green API mandaría la respuesta de vuelta al chat de tu mamá
-            # (Más adelante configuramos la llamada para enviar el mensaje de respuesta)
-            print(f"Mensaje de {chat_id}: {mensaje_texto}")
-            print(f"Respuesta generada: {respuesta_texto}")
-            
-    except Exception as e:
-        print("Error procesando webhook:", e)
-        
+            if codigo_sabor in inventario:
+                if comando == "+":
+                    inventario[codigo_sabor]["cantidad"] += cantidad
+                    return f"✅ ¡Agregado! Ahora hay {inventario[codigo_sabor]['cantidad']} de {inventario[codigo_sabor]['nombre']}."
+                elif comando == "-":
+                    if inventario[codigo_sabor]["cantidad"] >= cantidad:
+                        inventario[codigo_sabor]["cantidad"] -= cantidad
+                        return f"🔻 Salida registrada. Quedan {inventario[codigo_sabor]['cantidad']} de {inventario[codigo_sabor]['nombre']}."
+                    else:
+                        return f"⚠️ Alerta: Solo quedan {inventario[codigo_sabor]['cantidad']} de {inventario[codigo_sabor]['nombre']}."
+            else:
+                return f"❌ El código '{codigo_sabor}' no existe. Revisa el menú para ver los códigos válidos."
+        except ValueError:
+            return "❌ La cantidad debe ser un número entero."
+
+    else:
+        return "🤖 *Comandos disponibles:*\n• `menu` o `inventario`\n• `+ [cant] [codigo]` (Ej: + 5 grande_queso)\n• `- [cant] [codigo]` (Ej: - 2 pasapalo_frito)"
+
+@app.route('/', methods=['GET'])
+def home():
+    return "Bot de Inventario de Tequeños Activo"
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
+
+    if data and 'messages' in data:
+        for message in data['messages']:
+            if not message.get('from_me'):
+                chat_id = message.get('chat_id')
+                texto_recibido = message.get('text', {}).get('body', '')
+
+                if texto_recibido:
+                    respuesta = procesar_comando(texto_recibido)
+                    enviar_mensaje_whapi(chat_id, respuesta)
+
     return jsonify({"status": "ok"}), 200
 
-if __name__ == "__main__":
-    app.run(port=5000)
+def enviar_mensaje_whapi(chat_id, texto):
+    headers = {
+        "Authorization": f"Bearer {WHAPI_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "to": chat_id,
+        "body": texto
+    }
+    requests.post(WHAPI_URL, json=payload, headers=headers)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
