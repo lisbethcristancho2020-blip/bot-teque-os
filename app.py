@@ -107,5 +107,5 @@ def enviar_mensaje_whapi(chat_id, texto):
     requests.post(WHAPI_URL, json=payload, headers=headers)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
