@@ -5,8 +5,8 @@ import requests
 app = Flask(__name__)
 
 # Configuración de Whapi
-WHAPI_TOKEN = "d4f5Jc8rv2J6hF9fWfFGJT6b3jKjzfg0MdaH7musc0e9bf17"
-WHAPI_URL = "https://gate.whapi.cloud/messages/text"
+WHAPI_TOKEN = "AtjlYXTeoEBseb4bVfuiAw0CdVa3D013"
+WHAPI_URL = "https://gate.whapi.cloud/"
 
 # Inventario y Precios de Tequeños
 inventario = {
