@@ -4,9 +4,9 @@ import requests
 
 app = Flask(__name__)
 
-# Configuración de Whapi
-WHAPI_TOKEN = "d4f5Jc8rv2J6hF9fWfFGJT6b3jKjzfg0MdaH7musc0e9bf17"
-WHAPI_URL = "https://gate.whapi.cloud/messages/text"
+# Configuración de Meta (WhatsApp Business API)
+META_TOKEN = os.environ.get("META_TOKEN", "AQUI_PEGAS_TU_TOKEN_TEMPORAL")
+PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "AQUI_PEGAS_TU_PHONE_NUMBER_ID")
 
 # Inventario y Precios de Tequeños
 inventario = {
@@ -77,34 +77,53 @@ def procesar_comando(texto):
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Bot de Inventario de Tequeños Activo"
+    return "Bot de Inventario de Tequeños Activo (Meta API)"
 
+# Ruta de verificación del Webhook que pide Meta obligatoriamente
+@app.route('/webhook', methods=['GET'])
+def verificar_webhook():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+    
+    # Puedes cambiar "tequenos_token_seguro" por la palabra clave que quieras al registrar el webhook en Meta
+    if mode == "subscribe" and token == "tequenos_token_seguro":
+        return challenge, 200
+    return "Verificación fallida", 403
+
+# Ruta que recibe los mensajes de WhatsApp
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
 
-    if data and 'messages' in data:
-        for message in data['messages']:
-            if not message.get('from_me'):
-                chat_id = message.get('chat_id')
-                texto_recibido = message.get('text', {}).get('body', '')
+    try:
+        # Estructura que usa Meta para los mensajes entrantes
+        mercurio = data['entry'][0]['changes'][0]['value']
+        if 'messages' in mercurio:
+            telefono_remitente = mercurio['messages'][0]['from']
+            texto_recibido = mercurio['messages'][0]['text']['body']
 
-                if texto_recibido:
-                    respuesta = procesar_comando(texto_recibido)
-                    enviar_mensaje_whapi(chat_id, respuesta)
+            if texto_recibido:
+                respuesta = procesar_comando(texto_recibido)
+                enviar_mensaje_meta(telefono_remitente, respuesta)
+    except Exception as e:
+        print(f"Error procesando mensaje: {e}")
 
     return jsonify({"status": "ok"}), 200
 
-def enviar_mensaje_whapi(chat_id, texto):
+def enviar_mensaje_meta(telefono, texto):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
-        "Authorization": f"Bearer {WHAPI_TOKEN}",
+        "Authorization": f"Bearer {META_TOKEN}",
         "Content-Type": "application/json"
     }
     payload = {
-        "to": chat_id,
-        "body": texto
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "type": "text",
+        "text": {"body": texto}
     }
-    requests.post(WHAPI_URL, json=payload, headers=headers)
+    requests.post(url, json=payload, headers=headers)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
